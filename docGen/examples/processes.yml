@@ -1,0 +1,13 @@
+processes:
+  - id: synthetic-geographic-address-validation
+    name: Synthetic Geographic Address Validation
+    entrypoints:
+      - synthetic.current:flow_1
+    business_description: >
+      Example process for the root-level sample artifacts. The service identity is
+      inferred because the sample files are not inside a full webMethods package tree.
+    owners:
+      - integration-team
+    tags:
+      - synthetic
+      - geographic-address

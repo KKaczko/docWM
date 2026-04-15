@@ -1,0 +1,14 @@
+site_name: webMethods Documentation
+docs_dir: docs
+theme:
+  name: material
+markdown_extensions:
+- tables
+- fenced_code
+nav:
+- Home: index.md
+- Summary: reports/summary.md
+- Services:
+  - synthetic.current:flow_1: services/synthetic/current/flow_1.md
+- Processes:
+  - Synthetic Geographic Address Validation: processes/synthetic-geographic-address-validation.md
