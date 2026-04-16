@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FLOW VERSION="3.0" CLEANUP="true">
+  <COMMENT>Submit order orchestration</COMMENT>
+  <SEQUENCE TIMEOUT="" EXIT-ON="FAILURE">
+    <COMMENT>main</COMMENT>
+    <INVOKE SERVICE="com.example.customer:validateCustomer" VALIDATE-IN="$none" VALIDATE-OUT="$none">
+      <COMMENT>Validate customer</COMMENT>
+    </INVOKE>
+    <INVOKE SERVICE="com.example.billing:createInvoice" VALIDATE-IN="$none" VALIDATE-OUT="$none">
+      <COMMENT>Create invoice</COMMENT>
+    </INVOKE>
+    <INVOKE SERVICE="pub.flow:invoke" VALIDATE-IN="$none" VALIDATE-OUT="$none">
+      <COMMENT>Dynamic audit publication</COMMENT>
+      <MAP MODE="INPUT">
+        <MAPSET FIELD="/serviceName;1;0">
+          <DATA ENCODING="XMLValues" I18N="true">
+            <Values version="2.0">
+              <value name="xml">com.example.audit:publishOrderSubmitted</value>
+            </Values>
+          </DATA>
+        </MAPSET>
+      </MAP>
+    </INVOKE>
+  </SEQUENCE>
+</FLOW>

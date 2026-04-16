@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FLOW VERSION="3.0" CLEANUP="true">
+  <COMMENT>Validate customer</COMMENT>
+  <SEQUENCE TIMEOUT="" EXIT-ON="FAILURE">
+    <MAP MODE="STANDALONE">
+      <COMMENT>Normalize customer id</COMMENT>
+      <MAPINVOKE SERVICE="pub.string:toUpper" VALIDATE-IN="$none" VALIDATE-OUT="$none"/>
+    </MAP>
+  </SEQUENCE>
+</FLOW>

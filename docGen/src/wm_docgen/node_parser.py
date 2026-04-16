@@ -13,14 +13,16 @@ from wm_docgen.xml_utils import direct_value
 
 @dataclass(slots=True)
 class NodeParseResult:
+    metadata: dict[str, str | None] = field(default_factory=dict)
     inputs: list[dict[str, Any]] = field(default_factory=list)
     outputs: list[dict[str, Any]] = field(default_factory=list)
+    fields: list[dict[str, Any]] = field(default_factory=list)
     document_references: list[DocumentReference] = field(default_factory=list)
     issues: list[ValidationIssue] = field(default_factory=list)
 
 
 class NodeParser:
-    def parse(self, path: Path, service_id: str) -> NodeParseResult:
+    def parse(self, path: Path, service_id: str, *, expect_signature: bool = True) -> NodeParseResult:
         result = NodeParseResult()
         try:
             root = ET.parse(path).getroot()
@@ -48,17 +50,22 @@ class NodeParser:
                 )
             )
 
+        result.metadata = _extract_metadata(root)
+        result.fields = _parse_document_fields(root, path, "node.document", result.document_references)
+
         svc_sig = root.find("./record[@name='svc_sig']")
         if svc_sig is None:
-            result.issues.append(
-                ValidationIssue(
-                    code="NODE_SIGNATURE_MISSING",
-                    severity="warning",
-                    message="node.ndf does not contain svc_sig metadata.",
-                    file=str(path),
-                    service_id=service_id,
+            if expect_signature:
+                result.issues.append(
+                    ValidationIssue(
+                        code="NODE_SIGNATURE_MISSING",
+                        severity="warning",
+                        message="node.ndf does not contain svc_sig metadata.",
+                        file=str(path),
+                        service_id=service_id,
+                    )
                 )
-            )
+            result.document_references = _dedupe_document_refs(result.document_references)
             return result
 
         sig_in = svc_sig.find("./record[@name='sig_in']")
@@ -69,6 +76,46 @@ class NodeParser:
             result.outputs = _parse_record_fields(sig_out, path, "node.sig_out", result.document_references)
         result.document_references = _dedupe_document_refs(result.document_references)
         return result
+
+
+def _extract_metadata(root: ET.Element) -> dict[str, str | None]:
+    return {
+        "svc_type": direct_value(root, "svc_type"),
+        "svc_subtype": direct_value(root, "svc_subtype"),
+        "svc_sigtype": direct_value(root, "svc_sigtype"),
+        "node_type": direct_value(root, "node_type"),
+        "node_subtype": direct_value(root, "node_subtype"),
+        "node_comment": direct_value(root, "node_comment"),
+    }
+
+
+def _parse_document_fields(
+    root: ET.Element,
+    file_path: Path,
+    context: str,
+    refs: list[DocumentReference],
+) -> list[dict[str, Any]]:
+    fields: list[dict[str, Any]] = []
+    arrays = root.findall("./array[@name='rec_fields']")
+    records = [record for record in root.findall("./record") if record.attrib.get("name") != "svc_sig"]
+    for array in arrays:
+        for child_record in array.findall("./record"):
+            field = _record_to_field(child_record)
+            field["path"] = field["name"]
+            field["children"] = _parse_record_fields(child_record, file_path, context, refs, field["path"])
+            if field.get("rec_ref"):
+                refs.append(
+                    DocumentReference(
+                        ref=field["rec_ref"],
+                        source=str(file_path),
+                        context=context,
+                        field_path=field["path"] or None,
+                    )
+                )
+            fields.append(field)
+    for record in records:
+        fields.extend(_parse_record_fields(record, file_path, context, refs))
+    return fields
 
 
 def _parse_record_fields(

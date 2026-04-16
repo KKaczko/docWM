@@ -1,13 +1,28 @@
 processes:
-  - id: synthetic-geographic-address-validation
-    name: Synthetic Geographic Address Validation
+  - id: order-submission
+    name: Order Submission
     entrypoints:
-      - synthetic.current:flow_1
+      - com.example.order:submitOrder
     business_description: >
-      Example process for the root-level sample artifacts. The service identity is
-      inferred because the sample files are not inside a full webMethods package tree.
+      Receives an order request, validates customer data, creates an invoice,
+      and records that an audit/event publication step is dynamically invoked.
     owners:
-      - integration-team
+      - Order Management Team
+      - Integration Team
     tags:
-      - synthetic
-      - geographic-address
+      - order
+      - billing
+      - example
+    business_steps:
+      - name: Receive request
+        description: Accept the order submission request and orchestrate downstream work.
+        services:
+          - com.example.order:submitOrder
+      - name: Validate customer
+        description: Confirm that customer data is usable before billing.
+        services:
+          - com.example.customer:validateCustomer
+      - name: Create invoice
+        description: Create an invoice using a Java service whose implementation source is unresolved in this sample.
+        services:
+          - com.example.billing:createInvoice

@@ -8,7 +8,7 @@ from wm_docgen.models import ScanResult, ValidationIssue
 def validate_scan_result(result: ScanResult) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     for service in result.services:
-        if not service.steps:
+        if service.service_type == "flow_service" and not service.steps:
             issues.append(
                 ValidationIssue(
                     code="SERVICE_STEPS_MISSING",

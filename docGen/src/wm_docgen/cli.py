@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from wm_docgen.discovery import scan_source
@@ -31,6 +32,12 @@ def main(argv: list[str] | None = None) -> int:
     validate_parser = subparsers.add_parser("validate", help="Scan artifacts and print validation issues.")
     validate_parser.add_argument("--source", type=Path, default=Path("."))
     validate_parser.add_argument("--service-id", help="Override synthetic service id when scanning one orphan flow.")
+
+    list_parser = subparsers.add_parser("list-services", help="List discovered service IDs.")
+    list_parser.add_argument("--source", type=Path, default=Path("."))
+    list_parser.add_argument("--service-id", help="Override synthetic service id when scanning one orphan flow.")
+    list_parser.add_argument("--format", choices=["plain", "table", "json"], default="table")
+    list_parser.add_argument("--include-documents", action="store_true")
 
     fetch_parser = subparsers.add_parser("fetch-samples", help="Download representative public sample artifacts.")
     fetch_parser.add_argument("--out", type=Path, default=Path("examples/public-samples"))
@@ -66,6 +73,18 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{issue.severity.upper()} {issue.code}{service}{location}: {issue.message}")
         return 1 if any(issue.severity == "error" for issue in result.validation_issues) else 0
 
+    if args.command == "list-services":
+        result = scan_source(args.source, args.service_id)
+        rows = _list_rows(result, include_documents=args.include_documents)
+        if args.format == "plain":
+            for row in rows:
+                print(row["id"])
+        elif args.format == "json":
+            print(json.dumps(rows, indent=2, sort_keys=True))
+        else:
+            print(_format_table(rows))
+        return 1 if any(issue.severity == "error" for issue in result.validation_issues) else 0
+
     if args.command == "fetch-samples":
         written = fetch_samples(args.out)
         for path in written:
@@ -73,6 +92,60 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     return 2
+
+
+def _list_rows(result, *, include_documents: bool) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for service in sorted(result.services, key=lambda item: item.id):
+        rows.append(
+            {
+                "id": service.id,
+                "package": service.package,
+                "type": service.service_type,
+                "source_files": ",".join(service.source_files.keys()),
+                "dependency_count": len(service.dependencies),
+                "warning_count": len(service.warnings),
+            }
+        )
+    if include_documents:
+        for document in sorted(result.document_types, key=lambda item: item.id):
+            rows.append(
+                {
+                    "id": document.id,
+                    "package": document.package,
+                    "type": "document_type",
+                    "source_files": ",".join(document.source_files.keys()),
+                    "dependency_count": len(document.document_references),
+                    "warning_count": len(document.warnings),
+                }
+            )
+    return rows
+
+
+def _format_table(rows: list[dict[str, object]]) -> str:
+    headers = ["service_id", "package", "type", "source_files", "dependency_count", "warning_count"]
+    normalized = [
+        {
+            "service_id": str(row["id"]),
+            "package": str(row["package"]),
+            "type": str(row["type"]),
+            "source_files": str(row["source_files"]),
+            "dependency_count": str(row["dependency_count"]),
+            "warning_count": str(row["warning_count"]),
+        }
+        for row in rows
+    ]
+    widths = {
+        header: max(len(header), *(len(row[header]) for row in normalized)) if normalized else len(header)
+        for header in headers
+    }
+    lines = [
+        "  ".join(header.ljust(widths[header]) for header in headers),
+        "  ".join("-" * widths[header] for header in headers),
+    ]
+    for row in normalized:
+        lines.append("  ".join(row[header].ljust(widths[header]) for header in headers))
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":

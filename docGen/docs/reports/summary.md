@@ -4,10 +4,17 @@
 
 | Package | Services | Inferred |
 | --- | ---: | --- |
-| `synthetic.current` | 1 | True |
+| `SampleOrder` | 3 | False |
+
+## Document Types
+
+| Document | Package |
+| --- | --- |
+| `com.example.docs:Order` | `SampleOrder` |
 
 ## Validation Issues
 
 | Severity | Code | Message | Service |
 | --- | --- | --- | --- |
-| warning | `INFERRED_STRUCTURE` | Service structure is inferred because the artifacts are not inside a package ns tree. | `synthetic.current:flow_1` |
+| warning | `DYNAMIC_INVOKE_TARGET_UNKNOWN` | Dynamic invocation via 'pub.flow:invoke' at step 0.0.2; target cannot be resolved statically. | `com.example.order:submitOrder` |
+| warning | `JAVA_SOURCE_NOT_FOUND` | Java service implementation source could not be found by service name. | `com.example.billing:createInvoice` |
