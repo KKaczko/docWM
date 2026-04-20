@@ -8,9 +8,12 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from wm_docgen.models import (
+    ConditionFact,
     DependencyEdge,
     DocumentReference,
     DynamicInvocation,
+    EntityAction,
+    MappingFact,
     Step,
     ValidationIssue,
 )
@@ -43,6 +46,9 @@ class FlowParseResult:
     dependencies: list[DependencyEdge] = field(default_factory=list)
     document_references: list[DocumentReference] = field(default_factory=list)
     dynamic_invocations: list[DynamicInvocation] = field(default_factory=list)
+    entity_actions: list[EntityAction] = field(default_factory=list)
+    mapping_facts: list[MappingFact] = field(default_factory=list)
+    condition_facts: list[ConditionFact] = field(default_factory=list)
     issues: list[ValidationIssue] = field(default_factory=list)
 
 
@@ -133,6 +139,19 @@ class FlowParser:
                     )
                 )
 
+        for fact in _condition_facts(element, service_id, step_id):
+            result.condition_facts.append(fact)
+            for path in fact.referenced_paths:
+                result.entity_actions.append(
+                    _entity_action(
+                        service_id=service_id,
+                        action=fact.kind,
+                        path=path,
+                        step_id=step_id,
+                        evidence=fact.evidence,
+                    )
+                )
+
         child_step_index = 0
         for child in element:
             if child.tag == "COMMENT":
@@ -145,7 +164,14 @@ class FlowParser:
                 )
                 child_step_index += 1
             elif child.tag in MAPPING_OPERATION_TAGS:
-                step.mapping_operations.append(_mapping_operation(child))
+                operation = _mapping_operation(child)
+                step.mapping_operations.append(operation)
+                mapping_fact, entity_actions = _mapping_facts_and_actions(
+                    child, service_id, step_id, operation["raw_xml"]
+                )
+                if mapping_fact:
+                    result.mapping_facts.append(mapping_fact)
+                result.entity_actions.extend(entity_actions)
             elif child.tag in KNOWN_PAYLOAD_TAGS:
                 continue
             else:
@@ -176,6 +202,178 @@ def _mapping_operation(element: ET.Element) -> dict[str, Any]:
         "attributes": dict(element.attrib),
         "raw_xml": compact_xml(element),
     }
+
+
+def _mapping_facts_and_actions(
+    element: ET.Element, service_id: str, step_id: str, evidence: str
+) -> tuple[MappingFact | None, list[EntityAction]]:
+    actions: list[EntityAction] = []
+    if element.tag == "MAPCOPY":
+        from_path = element.attrib.get("FROM")
+        to_path = element.attrib.get("TO")
+        fact = MappingFact(
+            service_id=service_id,
+            kind="MAPCOPY",
+            step_id=step_id,
+            evidence=evidence,
+            from_path=from_path,
+            to_path=to_path,
+        )
+        if from_path:
+            actions.append(_entity_action(service_id, "copy_from", from_path, step_id, evidence))
+            actions.append(_entity_action(service_id, "read", from_path, step_id, evidence))
+        if to_path:
+            actions.append(_entity_action(service_id, "copy_to", to_path, step_id, evidence))
+            actions.append(_entity_action(service_id, "write", to_path, step_id, evidence))
+        return fact, actions
+    if element.tag == "MAPSET":
+        field_path = element.attrib.get("FIELD")
+        fact = MappingFact(
+            service_id=service_id,
+            kind="MAPSET",
+            step_id=step_id,
+            evidence=evidence,
+            field_path=field_path,
+            literal_value=_literal_xml_value(element),
+        )
+        if field_path:
+            actions.append(_entity_action(service_id, "set", field_path, step_id, evidence))
+            actions.append(_entity_action(service_id, "write", field_path, step_id, evidence))
+        return fact, actions
+    if element.tag == "MAPDELETE":
+        field_path = element.attrib.get("FIELD")
+        fact = MappingFact(
+            service_id=service_id,
+            kind="MAPDELETE",
+            step_id=step_id,
+            evidence=evidence,
+            field_path=field_path,
+        )
+        if field_path:
+            actions.append(_entity_action(service_id, "delete", field_path, step_id, evidence))
+        return fact, actions
+    return None, actions
+
+
+def _condition_facts(element: ET.Element, service_id: str, step_id: str) -> list[ConditionFact]:
+    facts: list[ConditionFact] = []
+    if element.tag in {"BRANCH", "SEQUENCE"} and element.attrib.get("NAME"):
+        expression = element.attrib["NAME"]
+        if _looks_like_condition(expression):
+            facts.append(
+                ConditionFact(
+                    service_id=service_id,
+                    kind="condition",
+                    expression=expression,
+                    step_id=step_id,
+                    evidence=compact_xml(element, max_chars=500),
+                    referenced_paths=_referenced_paths(expression),
+                )
+            )
+    if element.tag == "BRANCH" and element.attrib.get("SWITCH"):
+        expression = element.attrib["SWITCH"]
+        facts.append(
+            ConditionFact(
+                service_id=service_id,
+                kind="branch_switch",
+                expression=expression,
+                step_id=step_id,
+                evidence=compact_xml(element, max_chars=500),
+                referenced_paths=_referenced_paths(expression) or [_clean_pipeline_path(expression)],
+            )
+        )
+    if element.tag == "LOOP" and element.attrib.get("IN-ARRAY"):
+        expression = element.attrib["IN-ARRAY"]
+        facts.append(
+            ConditionFact(
+                service_id=service_id,
+                kind="loop",
+                expression=expression,
+                step_id=step_id,
+                evidence=compact_xml(element, max_chars=500),
+                referenced_paths=[_clean_pipeline_path(expression)],
+            )
+        )
+    return facts
+
+
+def _entity_action(
+    service_id: str, action: str, path: str, step_id: str, evidence: str
+) -> EntityAction:
+    entity_ref, field_path, inferred = _entity_from_path(path)
+    return EntityAction(
+        service_id=service_id,
+        action=action,
+        field_path=field_path,
+        source_step_id=step_id,
+        evidence=evidence,
+        entity_ref=entity_ref,
+        inferred=inferred,
+    )
+
+
+def _entity_from_path(path: str) -> tuple[str | None, str, bool]:
+    clean_path = _clean_pipeline_path(path)
+    entity_ref: str | None = None
+    clean_parts: list[str] = []
+    for raw_part in path.split("/"):
+        if not raw_part:
+            continue
+        pieces = raw_part.split(";")
+        if pieces[0]:
+            clean_parts.append(pieces[0])
+        for piece in pieces[1:]:
+            if ":" in piece and piece not in {"0", "1", "2", "3", "4"}:
+                entity_ref = piece
+    if entity_ref:
+        return entity_ref, "/" + "/".join(clean_parts), False
+    if clean_parts:
+        return clean_parts[0], clean_path, True
+    return None, clean_path, True
+
+
+def _literal_xml_value(element: ET.Element) -> str | None:
+    values = []
+    for value in element.iter("value"):
+        text = (value.text or "").strip()
+        if text:
+            values.append(text)
+    if len(values) == 1 and len(values[0]) <= 200:
+        return values[0]
+    return None
+
+
+def _referenced_paths(expression: str) -> list[str]:
+    paths: list[str] = []
+    current: list[str] = []
+    in_ref = False
+    for char in expression:
+        if char == "%":
+            if in_ref and current:
+                paths.append(_clean_pipeline_path("".join(current)))
+            current = []
+            in_ref = not in_ref
+        elif in_ref:
+            current.append(char)
+    if expression.startswith("/"):
+        paths.append(_clean_pipeline_path(expression))
+    return sorted(set(path for path in paths if path))
+
+
+def _clean_pipeline_path(path: str) -> str:
+    if not path:
+        return ""
+    parts = []
+    for part in path.split("/"):
+        if not part:
+            continue
+        parts.append(part.split(";", 1)[0])
+    return "/" + "/".join(parts) if path.startswith("/") else "/".join(parts)
+
+
+def _looks_like_condition(expression: str) -> bool:
+    markers = ["%", "$null", "==", "!=", ">", "<", "$default", "&&", "||"]
+    return any(marker in expression for marker in markers)
 
 
 def _dynamic_invocation(

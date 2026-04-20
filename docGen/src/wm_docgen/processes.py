@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 from wm_docgen.graph import service_call_targets
-from wm_docgen.models import BusinessStep, DynamicInvocation, ProcessDefinition, Service, ValidationIssue
+from wm_docgen.models import BusinessStep, DynamicInvocation, LlmEnrichment, ProcessDefinition, Service, ValidationIssue
 from wm_docgen.xml_utils import safe_slug
 
 
@@ -20,6 +20,7 @@ class ProcessAnalysis:
     supporting_service_ids: list[str]
     dynamic_invocations: list[DynamicInvocation]
     issues: list[ValidationIssue]
+    llm_enrichment: LlmEnrichment | None = None
 
 
 def load_processes(path: Path | None) -> list[ProcessDefinition]:

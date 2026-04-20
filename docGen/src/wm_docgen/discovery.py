@@ -244,6 +244,9 @@ def _parse_artifact(artifact: ServiceArtifact, flow_parser: FlowParser, node_par
         service.dependencies.extend(flow_result.dependencies)
         service.document_references.extend(flow_result.document_references)
         service.dynamic_invocations.extend(flow_result.dynamic_invocations)
+        service.entity_actions.extend(flow_result.entity_actions)
+        service.mapping_facts.extend(flow_result.mapping_facts)
+        service.condition_facts.extend(flow_result.condition_facts)
         service.warnings.extend(flow_result.issues)
 
     if artifact.node_path:

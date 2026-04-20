@@ -47,6 +47,8 @@ wm-docgen scan --source packages --json build/docgen/services.json
 wm-docgen list-services --source packages --format plain
 wm-docgen validate --source packages
 wm-docgen fetch-samples --out examples/public-samples
+wm-docgen llm-test --ollama-url http://localhost:11434 --ollama-model llama3.1
+wm-docgen llm-test --llm openai-compatible --llm-api-base https://server/ollama/v1 --llm-model MODEL_NAME --llm-api-key-env OLLAMA_API_KEY
 ```
 
 Use `--service-id package.namespace:serviceName` when scanning one orphan flow if
@@ -140,6 +142,76 @@ The scanner also detects Java service `node.ndf` files without `flow.xml`,
 document-only `node.ndf` files, and known dynamic invocation patterns such as
 `pub.flow:invoke`. Dynamic invocation targets are reported as risks unless they
 are statically visible; the tool does not invent dependency edges.
+
+## Optional Ollama Enrichment
+
+Normal builds are deterministic and do not call an LLM. To add local
+AI-assisted explanations, run a build with Ollama enabled:
+
+```bash
+wm-docgen build \
+  --source packages \
+  --out build/docgen \
+  --docs docs \
+  --processes examples/processes.yml \
+  --llm ollama \
+  --ollama-url http://localhost:11434 \
+  --ollama-model llama3.1
+```
+
+For OpenAI-compatible servers, such as an Ollama proxy exposed at
+`/v1/chat/completions`, use `openai-compatible` and keep the API key in an
+environment variable:
+
+```bash
+export OLLAMA_API_KEY='your-key'
+
+wm-docgen build \
+  --source packages \
+  --out build/docgen \
+  --docs docs \
+  --processes examples/processes.yml \
+  --llm openai-compatible \
+  --llm-api-base https://server/ollama/v1 \
+  --llm-model MODEL_NAME \
+  --llm-api-key-env OLLAMA_API_KEY
+```
+
+You can also use a config file:
+
+```bash
+wm-docgen build \
+  --source packages \
+  --out build/docgen \
+  --docs docs \
+  --processes examples/processes.yml \
+  --llm ollama \
+  --llm-config examples/llm.yml
+```
+
+OpenAI-compatible config example:
+
+```bash
+wm-docgen build \
+  --source packages \
+  --out build/docgen \
+  --docs docs \
+  --processes examples/processes.yml \
+  --llm openai-compatible \
+  --llm-config examples/openai-compatible-llm.yml
+```
+
+Useful flags:
+
+- `--llm-cache build/docgen/llm-cache`
+- `--refresh-llm`
+- `--llm-timeout 120`
+- `--llm-api-base https://server/ollama/v1`
+- `--llm-model MODEL_NAME`
+- `--llm-api-key-env OLLAMA_API_KEY`
+
+LLM sections are clearly labeled as AI-assisted. Parsed dependencies, mappings,
+conditions, and validation warnings remain the source of truth.
 
 ## Tests
 

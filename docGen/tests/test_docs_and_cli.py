@@ -191,7 +191,11 @@ def test_cli_build_writes_docs_and_mkdocs_config(tmp_path: Path) -> None:
     assert (docs_dir / "business-summary.md").exists()
     assert (docs_dir / "reports" / "summary.md").exists()
     assert mkdocs_path.exists()
-    assert "Business Summary" in mkdocs_path.read_text(encoding="utf-8")
+    mkdocs_config = mkdocs_path.read_text(encoding="utf-8")
+    assert "Business Summary" in mkdocs_config
+    assert "pymdownx.superfences" in mkdocs_config
+    assert "name: mermaid" in mkdocs_config
+    assert "format: !!python/name:pymdownx.superfences.fence_code_format" in mkdocs_config
 
 
 def _write_document_node(path: Path) -> None:

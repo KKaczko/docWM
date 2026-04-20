@@ -34,6 +34,9 @@ def test_orphan_artifacts_parse_steps_and_invokes(tmp_path: Path) -> None:
 
     warning_codes = {issue.code for issue in service.warnings}
     assert "INFERRED_STRUCTURE" in warning_codes
+    assert {fact.kind for fact in service.mapping_facts} >= {"MAPCOPY", "MAPSET", "MAPDELETE"}
+    assert {fact.kind for fact in service.condition_facts} >= {"condition", "loop"}
+    assert {action.action for action in service.entity_actions} >= {"copy_from", "copy_to", "set", "delete", "loop"}
 
 
 def test_node_signature_extracts_document_references(tmp_path: Path) -> None:
@@ -177,19 +180,29 @@ def _write_orphan_flow(path: Path) -> None:
     <COMMENT>try - catch</COMMENT>
     <MAP MODE="STANDALONE">
       <COMMENT>calculate list size</COMMENT>
+      <MAPSET FIELD="/input;4;0;pkg.docs:Input/status;1;0">
+        <DATA ENCODING="XMLValues" I18N="true">
+          <Values version="2.0">
+            <value name="xml">NEW</value>
+          </Values>
+        </DATA>
+      </MAPSET>
       <MAPINVOKE SERVICE="pub.list:sizeOfList" VALIDATE-IN="$none" VALIDATE-OUT="$none">
         <MAP MODE="INVOKEINPUT">
-          <MAPCOPY FROM="/items;3;1" TO="/fromList;3;1"/>
+          <MAPCOPY FROM="/input;4;0;pkg.docs:Input/items;3;1" TO="/fromList;3;1"/>
         </MAP>
       </MAPINVOKE>
+      <MAPDELETE FIELD="/tempValue;1;0"/>
     </MAP>
     <BRANCH LABELEXPRESSIONS="true">
-      <LOOP NAME="%count% != 0" IN-ARRAY="/items">
-        <INVOKE SERVICE="pkg.external:run" VALIDATE-IN="$none" VALIDATE-OUT="$none">
-          <COMMENT>call external service</COMMENT>
-        </INVOKE>
-        <EXIT FROM="$loop" SIGNAL="SUCCESS"/>
-      </LOOP>
+      <SEQUENCE NAME="%input/status% == $null" EXIT-ON="FAILURE">
+        <LOOP NAME="%count% != 0" IN-ARRAY="/items">
+          <INVOKE SERVICE="pkg.external:run" VALIDATE-IN="$none" VALIDATE-OUT="$none">
+            <COMMENT>call external service</COMMENT>
+          </INVOKE>
+          <EXIT FROM="$loop" SIGNAL="SUCCESS"/>
+        </LOOP>
+      </SEQUENCE>
     </BRANCH>
     <INVOKE SERVICE="pub.flow:clearPipeline" VALIDATE-IN="$none" VALIDATE-OUT="$none"/>
   </SEQUENCE>

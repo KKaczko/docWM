@@ -49,6 +49,23 @@ Example order submission flow service.
   Candidate fields: `MAPSET@FIELD=/serviceName;1;0`
   Candidate values: `com.example.audit:publishOrderSubmitted`
 
+## Parsed Entity Actions
+
+| Action | Entity | Field | Inferred | Step |
+| --- | --- | --- | --- | --- |
+| `set` | `serviceName` | `/serviceName` | True | `0.0.2.0` |
+| `write` | `serviceName` | `/serviceName` | True | `0.0.2.0` |
+
+## Parsed Conditions
+
+_No conditions extracted._
+
+## Parsed Mapping Behavior
+
+| Kind | From | To | Field | Value | Step |
+| --- | --- | --- | --- | --- | --- |
+| `MAPSET` | `` | `` | `/serviceName;1;0` | `com.example.audit:publishOrderSubmitted` | `0.0.2.0` |
+
 ## Dependency Diagram
 
 ```mermaid

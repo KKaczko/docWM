@@ -109,6 +109,7 @@
       "source_service_id": "com.example.order:submitOrder"
     }
   ],
+  "llm_enrichments": [],
   "packages": [
     {
       "name": "SampleOrder",
@@ -123,6 +124,7 @@
   ],
   "services": [
     {
+      "condition_facts": [],
       "dependencies": [
         {
           "dependency_type": "service_call",
@@ -136,6 +138,7 @@
       ],
       "document_references": [],
       "dynamic_invocations": [],
+      "entity_actions": [],
       "id": "com.example.customer:validateCustomer",
       "inference_notes": [],
       "inputs": [
@@ -150,6 +153,8 @@
           "rec_ref": null
         }
       ],
+      "llm_enrichment": null,
+      "mapping_facts": [],
       "name": "validateCustomer",
       "namespace_path": "com.example.customer",
       "node_comment": null,
@@ -234,6 +239,7 @@
       "warnings": []
     },
     {
+      "condition_facts": [],
       "dependencies": [
         {
           "dependency_type": "service_call",
@@ -295,6 +301,26 @@
           "step_id": "0.0.2"
         }
       ],
+      "entity_actions": [
+        {
+          "action": "set",
+          "entity_ref": "serviceName",
+          "evidence": "<MAPSET FIELD=\"/serviceName;1;0\"> <DATA ENCODING=\"XMLValues\" I18N=\"true\"> <Values version=\"2.0\"> <value name=\"xml\">com.example.audit:publishOrderSubmitted</value> </Values> </DATA> </MAPSET>",
+          "field_path": "/serviceName",
+          "inferred": true,
+          "service_id": "com.example.order:submitOrder",
+          "source_step_id": "0.0.2.0"
+        },
+        {
+          "action": "write",
+          "entity_ref": "serviceName",
+          "evidence": "<MAPSET FIELD=\"/serviceName;1;0\"> <DATA ENCODING=\"XMLValues\" I18N=\"true\"> <Values version=\"2.0\"> <value name=\"xml\">com.example.audit:publishOrderSubmitted</value> </Values> </DATA> </MAPSET>",
+          "field_path": "/serviceName",
+          "inferred": true,
+          "service_id": "com.example.order:submitOrder",
+          "source_step_id": "0.0.2.0"
+        }
+      ],
       "id": "com.example.order:submitOrder",
       "inference_notes": [],
       "inputs": [
@@ -307,6 +333,19 @@
           "node_type": null,
           "path": "order",
           "rec_ref": "com.example.docs:Order"
+        }
+      ],
+      "llm_enrichment": null,
+      "mapping_facts": [
+        {
+          "evidence": "<MAPSET FIELD=\"/serviceName;1;0\"> <DATA ENCODING=\"XMLValues\" I18N=\"true\"> <Values version=\"2.0\"> <value name=\"xml\">com.example.audit:publishOrderSubmitted</value> </Values> </DATA> </MAPSET>",
+          "field_path": "/serviceName;1;0",
+          "from_path": null,
+          "kind": "MAPSET",
+          "literal_value": "com.example.audit:publishOrderSubmitted",
+          "service_id": "com.example.order:submitOrder",
+          "step_id": "0.0.2.0",
+          "to_path": null
         }
       ],
       "name": "submitOrder",
@@ -438,6 +477,7 @@
       ]
     },
     {
+      "condition_facts": [],
       "dependencies": [
         {
           "dependency_type": "document_reference",
@@ -459,6 +499,7 @@
         }
       ],
       "dynamic_invocations": [],
+      "entity_actions": [],
       "id": "com.example.billing:createInvoice",
       "inference_notes": [
         "Java implementation source could not be uniquely resolved."
@@ -475,6 +516,8 @@
           "rec_ref": "com.example.docs:Order"
         }
       ],
+      "llm_enrichment": null,
+      "mapping_facts": [],
       "name": "createInvoice",
       "namespace_path": "com.example.billing",
       "node_comment": "Example Java service; implementation source is intentionally absent.",

@@ -14,6 +14,9 @@ from wm_docgen.models import DocumentType, ScanResult, Service, Step
 from wm_docgen.processes import ProcessAnalysis
 from wm_docgen.xml_utils import safe_slug
 
+MERMAID_FORMAT_PLACEHOLDER = "WM_DOCGEN_MERMAID_FORMAT"
+MERMAID_FORMAT_TAG = "!!python/name:pymdownx.superfences.fence_code_format"
+
 
 def write_json(result: ScanResult, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -88,10 +91,28 @@ def write_mkdocs_config(path: Path, docs_dir: Path, result: ScanResult, processe
         "site_name": "webMethods Documentation",
         "docs_dir": str(docs_dir),
         "theme": {"name": "material"},
-        "markdown_extensions": ["tables", "fenced_code"],
+        "markdown_extensions": [
+            "tables",
+            {
+                "pymdownx.superfences": {
+                    "custom_fences": [
+                        {
+                            "name": "mermaid",
+                            "class": "mermaid",
+                            "format": MERMAID_FORMAT_PLACEHOLDER,
+                        }
+                    ]
+                }
+            },
+        ],
         "nav": nav,
     }
-    path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    rendered = yaml.safe_dump(config, sort_keys=False)
+    rendered = rendered.replace(
+        f"format: {MERMAID_FORMAT_PLACEHOLDER}\n",
+        f"format: {MERMAID_FORMAT_TAG}\n",
+    )
+    path.write_text(rendered, encoding="utf-8")
 
 
 def _index_markdown(result: ScanResult) -> str:
@@ -183,6 +204,41 @@ def _service_markdown(service: Service) -> str:
         lines.append("_No dynamic invocation patterns detected._")
     lines.append("")
 
+    lines.extend(["## Parsed Entity Actions", ""])
+    if service.entity_actions:
+        lines.extend(["| Action | Entity | Field | Inferred | Step |", "| --- | --- | --- | --- | --- |"])
+        for action in service.entity_actions[:50]:
+            lines.append(
+                f"| `{action.action}` | `{action.entity_ref or ''}` | `{action.field_path}` | {action.inferred} | `{action.source_step_id}` |"
+            )
+    else:
+        lines.append("_No entity actions extracted._")
+    lines.extend(["", "## Parsed Conditions", ""])
+    if service.condition_facts:
+        lines.extend(["| Kind | Expression | Step |", "| --- | --- | --- |"])
+        for fact in service.condition_facts[:50]:
+            lines.append(f"| `{fact.kind}` | `{fact.expression}` | `{fact.step_id}` |")
+    else:
+        lines.append("_No conditions extracted._")
+    lines.extend(["", "## Parsed Mapping Behavior", ""])
+    if service.mapping_facts:
+        lines.extend(["| Kind | From | To | Field | Value | Step |", "| --- | --- | --- | --- | --- | --- |"])
+        for fact in service.mapping_facts[:50]:
+            lines.append(
+                f"| `{fact.kind}` | `{fact.from_path or ''}` | `{fact.to_path or ''}` | `{fact.field_path or ''}` | `{fact.literal_value or ''}` | `{fact.step_id}` |"
+            )
+    else:
+        lines.append("_No mapping facts extracted._")
+    lines.append("")
+
+    if service.llm_enrichment:
+        lines.extend([
+            "## AI-Assisted Interpretation",
+            "",
+            service.llm_enrichment.content,
+            "",
+        ])
+
     lines.extend(["## Dependency Diagram", "", "```mermaid", service_dependency_diagram(service), "```", ""])
     lines.extend(["## Steps", ""])
     if service.steps:
@@ -242,6 +298,13 @@ def _process_markdown(analysis: ProcessAnalysis, result: ScanResult) -> str:
             lines.append(f"- `{item.source_service_id}` uses `{item.invoker_service}` at step `{item.step_id}`")
     else:
         lines.append("_No dynamic invocation patterns detected._")
+    if analysis.llm_enrichment:
+        lines.extend([
+            "",
+            "## AI-Assisted Process Narrative",
+            "",
+            analysis.llm_enrichment.content,
+        ])
     lines.extend(["", "## Diagram", "", "```mermaid", process_dependency_diagram(analysis.service_ids, process_edges), "```", ""])
     lines.extend(["## Risks And Unknowns", ""])
     risks = list(analysis.issues)
@@ -287,12 +350,20 @@ def _document_markdown(document: DocumentType) -> str:
 
 def _business_summary_markdown(processes: list[ProcessAnalysis], result: ScanResult) -> str:
     service_by_id = {service.id: service for service in result.services}
+    summary_enrichment = _llm_enrichment(result, "business-summary", "business_summary")
     lines = [
         "# Business Summary",
         "",
         "This page summarizes configured business processes for non-technical review.",
         "",
     ]
+    if summary_enrichment:
+        lines.extend([
+            "## AI-Assisted Business Overview",
+            "",
+            summary_enrichment.content,
+            "",
+        ])
     if not processes:
         lines.append("_No processes configured._")
         lines.append("")
@@ -335,6 +406,13 @@ def _business_summary_markdown(processes: list[ProcessAnalysis], result: ScanRes
             lines.append("_No external dependencies detected._")
         lines.append("")
     return "\n".join(lines)
+
+
+def _llm_enrichment(result: ScanResult, target_id: str, target_type: str):
+    for enrichment in result.llm_enrichments:
+        if enrichment.target_id == target_id and enrichment.target_type == target_type:
+            return enrichment
+    return None
 
 
 def _summary_markdown(result: ScanResult) -> str:

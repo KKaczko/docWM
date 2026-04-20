@@ -1,0 +1,10 @@
+llm:
+  provider: ollama
+  base_url: http://localhost:11434
+  model: llama3.1
+  temperature: 0.1
+  timeout_seconds: 120
+  enabled_sections:
+    - service_summary
+    - process_summary
+    - entity_flow

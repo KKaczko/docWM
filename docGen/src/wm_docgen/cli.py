@@ -8,6 +8,10 @@ from pathlib import Path
 
 from wm_docgen.discovery import scan_source
 from wm_docgen.docs import generate_docs, write_json, write_mkdocs_config
+from wm_docgen.llm.config import load_llm_config
+from wm_docgen.llm.enrichment import enrich_with_llm
+from wm_docgen.llm.ollama_client import OllamaError, test_ollama
+from wm_docgen.llm.openai_compatible_client import OpenAICompatibleError, test_openai_compatible
 from wm_docgen.processes import analyze_processes, load_processes
 from wm_docgen.sample_fetcher import fetch_samples
 
@@ -28,6 +32,16 @@ def main(argv: list[str] | None = None) -> int:
     build_parser.add_argument("--processes", type=Path, default=Path("examples/processes.yml"))
     build_parser.add_argument("--service-id", help="Override synthetic service id when scanning one orphan flow.")
     build_parser.add_argument("--mkdocs", type=Path, default=Path("mkdocs.yml"))
+    build_parser.add_argument("--llm", choices=["none", "ollama", "openai-compatible"], default="none")
+    build_parser.add_argument("--llm-config", type=Path)
+    build_parser.add_argument("--llm-api-base")
+    build_parser.add_argument("--llm-model")
+    build_parser.add_argument("--llm-api-key-env")
+    build_parser.add_argument("--ollama-url")
+    build_parser.add_argument("--ollama-model")
+    build_parser.add_argument("--llm-cache", type=Path)
+    build_parser.add_argument("--refresh-llm", action="store_true")
+    build_parser.add_argument("--llm-timeout", type=int)
 
     validate_parser = subparsers.add_parser("validate", help="Scan artifacts and print validation issues.")
     validate_parser.add_argument("--source", type=Path, default=Path("."))
@@ -41,6 +55,15 @@ def main(argv: list[str] | None = None) -> int:
 
     fetch_parser = subparsers.add_parser("fetch-samples", help="Download representative public sample artifacts.")
     fetch_parser.add_argument("--out", type=Path, default=Path("examples/public-samples"))
+
+    llm_test_parser = subparsers.add_parser("llm-test", help="Test LLM connectivity.")
+    llm_test_parser.add_argument("--llm", choices=["ollama", "openai-compatible"], default="ollama")
+    llm_test_parser.add_argument("--llm-api-base")
+    llm_test_parser.add_argument("--llm-model")
+    llm_test_parser.add_argument("--llm-api-key-env")
+    llm_test_parser.add_argument("--ollama-url")
+    llm_test_parser.add_argument("--ollama-model")
+    llm_test_parser.add_argument("--llm-timeout", type=int, default=120)
 
     args = parser.parse_args(argv)
 
@@ -57,6 +80,18 @@ def main(argv: list[str] | None = None) -> int:
         processes = load_processes(args.processes)
         process_analyses = analyze_processes(processes, result.services)
         result.validation_issues.extend(issue for analysis in process_analyses for issue in analysis.issues)
+        if args.llm != "none":
+            llm_config = load_llm_config(
+                args.llm_config,
+                provider=args.llm,
+                base_url=args.llm_api_base or args.ollama_url,
+                model=args.llm_model or args.ollama_model,
+                api_key_env=args.llm_api_key_env,
+                timeout_seconds=args.llm_timeout,
+                cache_dir=args.llm_cache,
+                refresh_cache=args.refresh_llm,
+            )
+            enrich_with_llm(result, process_analyses, llm_config)
         write_json(result, json_path)
         generate_docs(result, args.docs, process_analyses)
         write_mkdocs_config(args.mkdocs, args.docs, result, process_analyses)
@@ -89,6 +124,33 @@ def main(argv: list[str] | None = None) -> int:
         written = fetch_samples(args.out)
         for path in written:
             print(path)
+        return 0
+
+    if args.command == "llm-test":
+        base_url = args.llm_api_base or args.ollama_url
+        model = args.llm_model or args.ollama_model
+        try:
+            config = load_llm_config(
+                None,
+                provider=args.llm,
+                base_url=base_url,
+                model=model,
+                api_key_env=args.llm_api_key_env,
+                timeout_seconds=args.llm_timeout,
+            )
+            if args.llm == "openai-compatible":
+                content = test_openai_compatible(
+                    config.base_url,
+                    config.model,
+                    config.timeout_seconds,
+                    api_key=config.api_key,
+                )
+            else:
+                content = test_ollama(config.base_url, config.model, config.timeout_seconds)
+        except (OllamaError, OpenAICompatibleError) as exc:
+            print(f"LLM test failed: {exc}")
+            return 1
+        print(content)
         return 0
 
     return 2

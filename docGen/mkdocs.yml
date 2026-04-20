@@ -4,7 +4,11 @@ theme:
   name: material
 markdown_extensions:
 - tables
-- fenced_code
+- pymdownx.superfences:
+    custom_fences:
+    - name: mermaid
+      class: mermaid
+      format: !!python/name:pymdownx.superfences.fence_code_format
 nav:
 - Home: index.md
 - Business Summary: business-summary.md

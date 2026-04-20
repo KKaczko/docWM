@@ -1,0 +1,11 @@
+llm:
+  provider: openai-compatible
+  base_url: https://server/ollama/v1
+  model: MODEL_NAME_FROM_V1_MODELS
+  api_key_env: OLLAMA_API_KEY
+  temperature: 0.1
+  timeout_seconds: 120
+  enabled_sections:
+    - service_summary
+    - process_summary
+    - entity_flow

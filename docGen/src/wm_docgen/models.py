@@ -71,6 +71,63 @@ class DynamicInvocation:
 
 
 @dataclass(slots=True)
+class EntityAction:
+    service_id: str
+    action: str
+    field_path: str
+    source_step_id: str
+    evidence: str
+    entity_ref: str | None = None
+    inferred: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class MappingFact:
+    service_id: str
+    kind: str
+    step_id: str
+    evidence: str
+    from_path: str | None = None
+    to_path: str | None = None
+    field_path: str | None = None
+    literal_value: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class ConditionFact:
+    service_id: str
+    kind: str
+    expression: str
+    step_id: str
+    evidence: str
+    referenced_paths: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class LlmEnrichment:
+    target_id: str
+    target_type: str
+    provider: str
+    model: str
+    content: str
+    prompt_version: str
+    cache_key: str | None = None
+    from_cache: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class Step:
     id: str
     kind: str
@@ -113,6 +170,10 @@ class Service:
     outputs: list[dict[str, Any]] = field(default_factory=list)
     document_references: list[DocumentReference] = field(default_factory=list)
     dynamic_invocations: list[DynamicInvocation] = field(default_factory=list)
+    entity_actions: list[EntityAction] = field(default_factory=list)
+    mapping_facts: list[MappingFact] = field(default_factory=list)
+    condition_facts: list[ConditionFact] = field(default_factory=list)
+    llm_enrichment: LlmEnrichment | None = None
     warnings: list[ValidationIssue] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -134,6 +195,10 @@ class Service:
             "outputs": list(self.outputs),
             "document_references": [ref.to_dict() for ref in self.document_references],
             "dynamic_invocations": [item.to_dict() for item in self.dynamic_invocations],
+            "entity_actions": [item.to_dict() for item in self.entity_actions],
+            "mapping_facts": [item.to_dict() for item in self.mapping_facts],
+            "condition_facts": [item.to_dict() for item in self.condition_facts],
+            "llm_enrichment": self.llm_enrichment.to_dict() if self.llm_enrichment else None,
             "warnings": [issue.to_dict() for issue in self.warnings],
         }
 
@@ -211,6 +276,7 @@ class ScanResult:
     document_types: list[DocumentType] = field(default_factory=list)
     dependencies: list[DependencyEdge] = field(default_factory=list)
     external_dependencies: list[ExternalDependency] = field(default_factory=list)
+    llm_enrichments: list[LlmEnrichment] = field(default_factory=list)
     validation_issues: list[ValidationIssue] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -220,5 +286,6 @@ class ScanResult:
             "document_types": [document.to_dict() for document in self.document_types],
             "dependencies": [edge.to_dict() for edge in self.dependencies],
             "external_dependencies": [dep.to_dict() for dep in self.external_dependencies],
+            "llm_enrichments": [item.to_dict() for item in self.llm_enrichments],
             "validation_issues": [issue.to_dict() for issue in self.validation_issues],
         }

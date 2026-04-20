@@ -46,6 +46,18 @@ _No service calls detected._
 
 _No dynamic invocation patterns detected._
 
+## Parsed Entity Actions
+
+_No entity actions extracted._
+
+## Parsed Conditions
+
+_No conditions extracted._
+
+## Parsed Mapping Behavior
+
+_No mapping facts extracted._
+
 ## Dependency Diagram
 
 ```mermaid
